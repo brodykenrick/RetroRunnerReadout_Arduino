@@ -39,28 +39,42 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 //NOTE: Narcoleptic.disableSerial() might impact above.....
 #define USE_NARCOLEPTIC_DISABLE //<! Use Narcoleptic to save some battery with disabling certain items but not use narco delay....
 
+//#define ANTPLUS_ON_HW_UART //!< H/w UART (i.e. Serial) instead of software serial
+
+
 #if (defined(USE_NARCOLEPTIC_DELAY) || defined(USE_NARCOLEPTIC_DISABLE))
 #include <Narcoleptic.h>
 #endif
+
+#if !defined(ANTPLUS_ON_HW_UART)
 #include <SoftwareSerial.h>
+#endif
 
 #include <LedControl.h>
 #include <ANTPlus.h>
+
+
 
 //TODO: Later when we swap to hardware serial then there can be no console.....
 #define USE_SERIAL_CONSOLE //!<Use the hardware serial as the console
 #define CONSOLE_BAUD_RATE (115200)
 
-#if defined(NDEBUG)
+#define LOOP_TEXT //<! A debugging mode that makes the strings displayed sequential (instead of random).
+
+
+#define DISPLAY_DURATION_MS (1200)  //!< This is the display time for 8 characters. Scrolling takes longer (not quite linear increase).
+#define DELAY_BETWEEN_DISPLAYS_MS (1200) //<! Duration to have screen shut down between displaying messages
+#define DISPLAY_INTENSITY (12) //<! 0..15
+
+
+ 
+#if defined(NDEBUG) || defined(ANTPLUS_ON_HW_UART)
 #undef CONSOLE_BAUD_RATE
 #undef USE_SERIAL_CONSOLE
 #endif
 
 
-//#define LOOP_TEXT //<! A debugging mode that makes the strings displayed sequential (instead of random).
-#define DISPLAY_DURATION_MS (1200)  //!< This is the display time for 8 characters. Scrolling takes longer (not quite linear increase).
-#define DELAY_BETWEEN_DISPLAYS_MS (1200) //<! Duration to have screen shut down between displaying messages
-#define DISPLAY_INTENSITY (12) //<! 0..15
+
 
 
 //Logging macros
@@ -136,15 +150,6 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 #define MAX_CHARS_TO_DISPLAY (56)
 #define MAX_CHARS_TO_DISPLAY_STR (MAX_CHARS_TO_DISPLAY+1) //'\0' terminated
 
-
-//TODO: To allow for better sleeping we need to be able to connect the nRF24AP2 to the hardware UART.
-//For this and to keep software serial working for debug purposes, thinking is:
-// check on pin 6 -- say it is connected to ground
-//If it is low then we use software serial
-//If it is high then we use hardware serial/USART
-// and http://rubenlaguna.com/wp/2008/10/15/arduino-sleep-mode-waking-up-when-receiving-data-on-the-usart/
-
-
 #define ANTPLUS_BAUD_RATE (9600)
 
 //TODO: Do not publish.....
@@ -158,13 +163,22 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 // ****************************************************************************
 
 //Arduino Pro Mini pins to the nrf24AP2 modules pinouts
+#if !defined(ANTPLUS_ON_HW_UART)
 const int TX_PIN       = 8; //Using software serial for the UART
 const int RX_PIN       = 9; //Ditto
+#else
+//TX=0
+//RX=1
+#endif
 
 const int RTS_PIN      = 2;
 const int RTS_PIN_INT  = 0;
 
+
+#if !defined(ANTPLUS_ON_HW_UART)
 SoftwareSerial ant_serial(TX_PIN, RX_PIN); // RXArd, TXArd -- Arduino is opposite to nRF24AP2 module
+#endif
+
 ANTPlus        antplus   = ANTPlus(RTS_PIN, 3/*SUSPEND*/, 4/*SLEEP*/, 5/*RESET*/ );
 LedControl     mydisplay = LedControl(11/*DIN:MOSI*/, 13/*CLK:SCK*/, 10/*CS:SS*/, 1/*Device count*/);
 
@@ -549,6 +563,23 @@ void my_delay_function(unsigned long duration_ms)
 
 }
 
+void get_text_from_pm_char_ptr_array(char dst_text[], int dst_text_size, /*PROGMEM*/ const char * const pm_char_ptr_array[], int pm_char_ptr_array_size, int counter)
+{
+  const char * const* str_in_pm = &pm_char_ptr_array[ counter % pm_char_ptr_array_size ];
+  
+  for(int i = 0; i<dst_text_size; i++)
+  {
+    dst_text[i] = '\0';
+  }
+  strncpy_P(dst_text, (char*)pgm_read_word( str_in_pm ), MAX_CHARS_TO_DISPLAY_STR);
+  
+//  SERIAL_DEBUG_PRINT_F( "Text = " );
+//  SERIAL_DEBUG_PRINT_F( " @ 0x" );
+//  SERIAL_DEBUG_PRINT2( (int)str_in_pm, HEX );
+//  SERIAL_DEBUG_PRINT_F( " = " );
+//  SERIAL_DEBUG_PRINTLN( dst_text );
+}
+
 // **************************************************************************************************
 // **********************************  Display  *****************************************************
 // **************************************************************************************************
@@ -635,7 +666,7 @@ const char * replace_special_strings(const char * const text, char * const repla
     else
     {
       //Something a little better than the tagged replacement text.
-      ret_text = "Be Heart Smart!";
+      ret_text = "Be Heart SMart!";
     }
   }
   
@@ -767,9 +798,11 @@ void process_packet( ANT_Packet * packet )
                 //SERIAL_DEBUG_PRINT_F( "SDM distance..... = ");
                 //SERIAL_DEBUG_PRINTLN( sdm_dp->distance_int );
                 SERIAL_INFO_PRINT_F( "Strides = ");
-                SERIAL_INFO_PRINTLN( update_sdm_rollover( sdm_dp->stride_count, &gCumulativeStrideCount, &gPreviousMessageStrideCount ) );
+                update_sdm_rollover( sdm_dp->stride_count, &gCumulativeStrideCount, &gPreviousMessageStrideCount );
+                SERIAL_INFO_PRINTLN( gCumulativeStrideCount );
                 SERIAL_INFO_PRINT_F( "Distance = ");
-                SERIAL_INFO_PRINTLN( update_sdm_rollover( sdm_dp->distance_int, &gCumulativeDistance, &gPreviousMessageDistance ) );
+                update_sdm_rollover( sdm_dp->distance_int, &gCumulativeDistance, &gPreviousMessageDistance );
+                SERIAL_INFO_PRINTLN( gCumulativeDistance );
               }
               break;
   
@@ -787,24 +820,6 @@ void process_packet( ANT_Packet * packet )
       break;
   }
 }
-
-void get_text_from_pm_char_ptr_array(char dst_text[], int dst_text_size, /*PROGMEM*/ const char * const pm_char_ptr_array[], int pm_char_ptr_array_size, int counter)
-{
-  const char * const* str_in_pm = &pm_char_ptr_array[ counter % pm_char_ptr_array_size ];
-  
-  for(int i = 0; i<dst_text_size; i++)
-  {
-    dst_text[i] = '\0';
-  }
-  strncpy_P(dst_text, (char*)pgm_read_word( str_in_pm ), MAX_CHARS_TO_DISPLAY_STR);
-  
-//  SERIAL_DEBUG_PRINT_F( "Text = " );
-//  SERIAL_DEBUG_PRINT_F( " @ 0x" );
-//  SERIAL_DEBUG_PRINT2( (int)str_in_pm, HEX );
-//  SERIAL_DEBUG_PRINT_F( " = " );
-//  SERIAL_DEBUG_PRINTLN( dst_text );
-}
-
 
 // **************************************************************************************************
 // ******************************  Loop functions  **************************************************
@@ -961,7 +976,7 @@ void setup()
 //  Narcoleptic.disableMillis();
 #if !defined(USE_SERIAL_CONSOLE)
   //Don't need serial if not debugging [NOTE: This may have implications later on USART usage...]
-  Narcoleptic.disableSerial();
+//TODO:XXX:Come back to this  Narcoleptic.disableSerial();
 #endif //!defined(USE_SERIAL_CONSOLE)
   Narcoleptic.disableADC();
 
@@ -983,8 +998,16 @@ void setup()
   //This is a 50 usec HIGH signal at the end of each valid ANT message received from the host at the chip
   attachInterrupt(RTS_PIN_INT, isr_rts_ant, RISING);
 
+
+#if defined(ANTPLUS_ON_HW_UART)
+  //Using hardware UART
+  Serial.begin(ANTPLUS_BAUD_RATE); 
+  antplus.begin( Serial );
+#else
+  //Using soft serial
   ant_serial.begin( ANTPLUS_BAUD_RATE ); 
   antplus.begin( ant_serial );
+#endif
 
   //This should not be strictly necessary - the device should always come up by itself....
   //But let's make sure we didn't miss the first RTS in a power-up race
@@ -1016,6 +1039,15 @@ void loop()
      (ret_val_ce_sdm == ANT_CHANNEL_ESTABLISH_COMPLETE))
   {
     loop_display();
+  }
+  else
+  {
+    //Number cycling will happen whilst the channels are starting up
+    static byte counter = 0;
+    mydisplay.shutdown(0, false);  // Turns on display
+    mydisplay.clearDisplay(0);
+    mydisplay.setChar(0, 0, counter++%0xF, false);
+    my_delay_function( 50 );
   }
 }
 
