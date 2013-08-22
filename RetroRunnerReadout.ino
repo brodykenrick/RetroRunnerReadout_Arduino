@@ -973,64 +973,6 @@ void setup()
 
 #endif
 
-#if 0
-  SERIAL_DEBUG_PRINT( STARTUP_TEXTS_COUNT );
-  SERIAL_DEBUG_PRINT_F( " " );
-  SERIAL_DEBUG_PRINTLN_F( "STARTUP_TEXTS" );
-  for(unsigned int counter = 0;
-      counter < STARTUP_TEXTS_COUNT; counter++)
-  {
-    char text[MAX_CHARS_TO_DISPLAY_STR];
-    get_text_from_pm_char_ptr_array(text, MAX_CHARS_TO_DISPLAY_STR,
-                                    startup_texts, STARTUP_TEXTS_COUNT, counter);
-    SERIAL_DEBUG_PRINT( counter );
-    SERIAL_DEBUG_PRINT_F( ":" );
-    SERIAL_DEBUG_PRINTLN( text );
-  }
-
-  SERIAL_DEBUG_PRINT( LOOP_TEXTS_COUNT );
-  SERIAL_DEBUG_PRINT_F( " " );
-  SERIAL_DEBUG_PRINTLN_F( "LOOP_TEXTS" );
-  for(unsigned int counter = 0;
-      counter < LOOP_TEXTS_COUNT; counter++)
-  {
-    char text[MAX_CHARS_TO_DISPLAY_STR];
-    get_text_from_pm_char_ptr_array(text, MAX_CHARS_TO_DISPLAY_STR,
-                                    loop_texts, LOOP_TEXTS_COUNT, counter);
-    SERIAL_DEBUG_PRINT( counter );
-    SERIAL_DEBUG_PRINT_F( ":" );
-    SERIAL_DEBUG_PRINTLN( text );
-  }
-
-  SERIAL_DEBUG_PRINT( NAMES_TEXTS_COUNT );
-  SERIAL_DEBUG_PRINT_F( " " );
-  SERIAL_DEBUG_PRINTLN_F( "NAMES_TEXTS" );
-  for(unsigned int counter = 0;
-      counter < NAMES_TEXTS_COUNT; counter++)
-  {
-    char text[MAX_CHARS_TO_DISPLAY_STR];
-    get_text_from_pm_char_ptr_array(text, MAX_CHARS_TO_DISPLAY_STR,
-                                    names_texts, NAMES_TEXTS_COUNT, counter);
-    SERIAL_DEBUG_PRINT( counter );
-    SERIAL_DEBUG_PRINT_F( ":" );
-    SERIAL_DEBUG_PRINTLN( text );
-  }
-
-  SERIAL_DEBUG_PRINT( MOTIVATES_TEXTS_COUNT );
-  SERIAL_DEBUG_PRINT_F( " " );
-  SERIAL_DEBUG_PRINTLN_F( "MOTIVATES_TEXTS" );
-  for(unsigned int counter = 0;
-      counter < MOTIVATES_TEXTS_COUNT; counter++)
-  {
-    char text[MAX_CHARS_TO_DISPLAY_STR];
-    get_text_from_pm_char_ptr_array(text, MAX_CHARS_TO_DISPLAY_STR,
-                                    motivates_texts, MOTIVATES_TEXTS_COUNT, counter);
-    SERIAL_DEBUG_PRINT( counter );
-    SERIAL_DEBUG_PRINT_F( ":" );
-    SERIAL_DEBUG_PRINTLN( text );
-  }
-#endif
-
   //Print the startup messages
   for(unsigned int counter_setup = 0;
       counter_setup < STARTUP_TEXTS_COUNT; counter_setup++)
