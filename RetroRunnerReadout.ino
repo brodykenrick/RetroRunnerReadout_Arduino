@@ -193,6 +193,7 @@ ANT_Channel hrm_channel =
   57,//freq            -- Garmin radio frequency
   32280,//period       -- Lowest sampling allowed for HRM
   ANT_SENSOR_NETWORK_KEY, //ant_net_key
+  0, //state_counter
 };
 
 #if 0
@@ -205,6 +206,7 @@ ANT_Channel fr410_channel =
   50,//freq            -- Garmin radio frequency
   8070,//period        -- 
   ANT_GPS_NETWORK_KEY, //ant_net_key
+  0, //state_counter
 };
 
 ANT_Channel cadence_channel =
@@ -216,6 +218,7 @@ ANT_Channel cadence_channel =
   50,//freq            -- Garmin radio frequency
   8085,//period        -- 
   ANT_SENSOR_NETWORK_KEY, //ant_net_key
+  0, //state_counter
 };
 #endif
 
@@ -229,6 +232,7 @@ ANT_Channel sdm_channel =
   57,//freq            -- Garmin radio frequency
   16268,//period       -- Lowest sampling allowed for SDM
   ANT_SENSOR_NETWORK_KEY, //ant_net_key
+  0, //state_counter
 };
 
 
