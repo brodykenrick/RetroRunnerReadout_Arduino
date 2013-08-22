@@ -39,7 +39,7 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 //NOTE: Narcoleptic.disableSerial() might impact above.....
 #define USE_NARCOLEPTIC_DISABLE //<! Use Narcoleptic to save some battery with disabling certain items but not use narco delay....
 
-//#define ANTPLUS_ON_HW_UART //!< H/w UART (i.e. Serial) instead of software serial
+#define ANTPLUS_ON_HW_UART //!< H/w UART (i.e. Serial) instead of software serial
 
 
 #if (defined(USE_NARCOLEPTIC_DELAY) || defined(USE_NARCOLEPTIC_DISABLE))
@@ -1035,6 +1035,8 @@ void loop()
   {
     loop_antplus();
   }
+  
+  int debug_delay_ms = 1200;
 
   //Get the ANT+ channels up quickly
   // then send some display messages
@@ -1046,12 +1048,27 @@ void loop()
   }
   else
   {
+    //debug_delay_ms = 50;
+  }
+  
+
+  {
     //Number cycling will happen whilst the channels are starting up
-    static byte counter = 0;
+    //static byte counter = 0;
     mydisplay.shutdown(0, false);  // Turns on display
     mydisplay.clearDisplay(0);
-    mydisplay.setChar(0, 0, counter++%0xF, false);
-    my_delay_function( 50 );
+//    mydisplay.setChar(0, 0, counter++%0xF, false);
+    mydisplay.setChar(0, 0, antplus.rx_packet_count%0xF, true);
+    mydisplay.setChar(0, 1, antplus.rx_packet_count%0xF0>>4, false);
+    mydisplay.setChar(0, 2, antplus.tx_packet_count%0xF, true);
+    mydisplay.setChar(0, 3, antplus.tx_packet_count%0xF0>>4, false);
+
+    mydisplay.setChar(0, 4, hrm_channel.state_counter%0xF, true);
+    mydisplay.setChar(0, 5, gReceivedHRMData, true);
+    mydisplay.setChar(0, 6, sdm_channel.state_counter%0xF, true);
+    mydisplay.setChar(0, 7, gReceivedSDMData, true);
+    my_delay_function( debug_delay_ms );
+    mydisplay.clearDisplay(0);
   }
 }
 
