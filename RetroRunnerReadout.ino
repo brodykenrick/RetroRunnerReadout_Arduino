@@ -39,7 +39,7 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 //NOTE: Narcoleptic.disableSerial() might impact above.....
 #define USE_NARCOLEPTIC_DISABLE //<! Use Narcoleptic to save some battery with disabling certain items but not use narco delay....
 
-#define ANTPLUS_ON_HW_UART //!< H/w UART (i.e. Serial) instead of software serial
+//#define ANTPLUS_ON_HW_UART //!< H/w UART (i.e. Serial) instead of software serial
 
 
 #if (defined(USE_NARCOLEPTIC_DELAY) || defined(USE_NARCOLEPTIC_DISABLE))
@@ -67,15 +67,10 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 #define DISPLAY_INTENSITY (12) //<! 0..15
 
 
- 
 #if defined(NDEBUG) || defined(ANTPLUS_ON_HW_UART)
 #undef CONSOLE_BAUD_RATE
 #undef USE_SERIAL_CONSOLE
 #endif
-
-
-
-
 
 //Logging macros
 //********************************************************************
@@ -164,27 +159,29 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 
 //Arduino Pro Mini pins to the nrf24AP2 modules pinouts
 #if !defined(ANTPLUS_ON_HW_UART)
-const int TX_PIN       = 8; //Using software serial for the UART
-const int RX_PIN       = 9; //Ditto
+static const int TX_PIN       = 8; //Using software serial for the UART
+static const int RX_PIN       = 9; //Ditto
 #else
 //TX=0
 //RX=1
 #endif
 
-const int RTS_PIN      = 2;
-const int RTS_PIN_INT  = 0;
+static const int RTS_PIN      = 2;
+static const int RTS_PIN_INT  = 0;
 
 
 #if !defined(ANTPLUS_ON_HW_UART)
-SoftwareSerial ant_serial(TX_PIN, RX_PIN); // RXArd, TXArd -- Arduino is opposite to nRF24AP2 module
+static SoftwareSerial ant_serial(TX_PIN, RX_PIN); // RXArd, TXArd -- Arduino is opposite to nRF24AP2 module
+#else
+//Using Serial instead
 #endif
 
-ANTPlus        antplus   = ANTPlus(RTS_PIN, 3/*SUSPEND*/, 4/*SLEEP*/, 5/*RESET*/ );
-LedControl     mydisplay = LedControl(11/*DIN:MOSI*/, 13/*CLK:SCK*/, 10/*CS:SS*/, 1/*Device count*/);
+static ANTPlus        antplus   = ANTPlus(RTS_PIN, 3/*SUSPEND*/, 4/*SLEEP*/, 5/*RESET*/ );
+static LedControl     mydisplay = LedControl(11/*DIN:MOSI*/, 13/*CLK:SCK*/, 10/*CS:SS*/, 1/*Device count*/);
 
 
 //ANT Channels for various device types
-ANT_Channel hrm_channel =
+static ANT_Channel hrm_channel =
 {
   0,//channel_number
   0,//network_number   -- public
@@ -197,7 +194,7 @@ ANT_Channel hrm_channel =
 };
 
 #if 0
-ANT_Channel fr410_channel =
+static ANT_Channel fr410_channel =
 {
   1,//channel_number
   0,//network_number   -- public
@@ -209,7 +206,7 @@ ANT_Channel fr410_channel =
   0, //state_counter
 };
 
-ANT_Channel cadence_channel =
+static ANT_Channel cadence_channel =
 {
   2,//channel_number
   0,//network_number   -- public
@@ -223,7 +220,7 @@ ANT_Channel cadence_channel =
 #endif
 
 //Garmin footpod
-ANT_Channel sdm_channel =
+static ANT_Channel sdm_channel =
 {
   4,//channel_number
   0,//network_number   -- public
@@ -236,23 +233,23 @@ ANT_Channel sdm_channel =
 };
 
 
-int last_computed_heart_rate = -1;
+static int last_computed_heart_rate = -1;
 
-static long int metres_today  = 42195;
-static long int metres_left   = metres_today;
+static long unsigned int metres_today  = 42195;
+static long unsigned int metres_left   = metres_today;
 
-boolean gReceivedHRMData = false;
-boolean gReceivedSDMData = false;
+static boolean gReceivedHRMData = false;
+static boolean gReceivedSDMData = false;
 
-int gCumulativeDistance      = 0;
-int gPreviousMessageDistance = -1;
+static unsigned long int gCumulativeDistance      = 0;
+static int gPreviousMessageDistance = -1;
 
-int gCumulativeStrideCount      = 0;
-int gPreviousMessageStrideCount = -1;
+static unsigned long int gCumulativeStrideCount      = 0;
+static int gPreviousMessageStrideCount = -1;
 
 //TODO: Make this dynamic later on
 //These match the ANT_Channel channel numbers above
-byte channel_device[ANT_DEVICE_NUMBER_CHANNELS] = {
+static byte channel_device[ANT_DEVICE_NUMBER_CHANNELS] = {
   DEVCE_TYPE_HRM,
   DEVCE_TYPE_GPS,
   0,
@@ -263,8 +260,8 @@ byte channel_device[ANT_DEVICE_NUMBER_CHANNELS] = {
   0
 };
 
-ANT_CHANNEL_ESTABLISH ret_val_ce_hrm = ANT_CHANNEL_ESTABLISH_PROGRESSING;
-ANT_CHANNEL_ESTABLISH ret_val_ce_sdm = ANT_CHANNEL_ESTABLISH_PROGRESSING;
+static ANT_CHANNEL_ESTABLISH ret_val_ce_hrm = ANT_CHANNEL_ESTABLISH_PROGRESSING;
+static ANT_CHANNEL_ESTABLISH ret_val_ce_sdm = ANT_CHANNEL_ESTABLISH_PROGRESSING;
 
 volatile int rts_ant_received = 0; //!< ANT RTS interrupt flag see isr_rts_ant()
 
@@ -723,7 +720,7 @@ void print_and_delay(const char * text)
 
 // SDM -- 6.2.2
 //Distance, time and stride count
-int update_sdm_rollover( int MessageValue, int * Cumulative, int * PreviousMessageValue )
+int update_sdm_rollover( int MessageValue, unsigned long int * Cumulative, int * PreviousMessageValue )
 {
   if((*PreviousMessageValue) == -1)
   {
@@ -893,23 +890,24 @@ void loop_antplus()
     rts_ant_received = 0;
   }
 
-  //TODO: Make this a while loop to drain buffer
-  ret_val = antplus.readPacket(packet, MAXPACKETLEN, 0 );
-
-  if((ret_val == MESSAGE_READ_EXPECTED) || (ret_val == MESSAGE_READ_OTHER))
+  //Read messages until we get a none
+  while( (ret_val = antplus.readPacket(packet, MAXPACKETLEN, 0 )) != MESSAGE_READ_NONE )
   {
-#if 0
-    if( (ret_val == MESSAGE_READ_EXPECTED) )
+    if((ret_val == MESSAGE_READ_EXPECTED) || (ret_val == MESSAGE_READ_OTHER))
     {
-      SERIAL_DEBUG_PRINTLN_F( "Expected" );
+  #if 0
+      if( (ret_val == MESSAGE_READ_EXPECTED) )
+      {
+        SERIAL_DEBUG_PRINTLN_F( "Expected" );
+      }
+      else
+      if( (ret_val == MESSAGE_READ_OTHER) )
+      {
+        SERIAL_DEBUG_PRINTLN_F( "Other" );
+      }
+  #endif
+      process_packet(packet);
     }
-    else
-    if( (ret_val == MESSAGE_READ_OTHER) )
-    {
-      SERIAL_DEBUG_PRINTLN_F( "Other" );
-    }
-#endif
-    process_packet(packet);
   }
 
   //Only one channel can progrss at a time though
@@ -1029,14 +1027,9 @@ void setup()
 
 void loop()
 {
-  //TODO: We execute a few of these to ensure the buffers clear fast enough (as loop_display() also delays)...
-  //TODO: Make it so that inside the function it loops until buffer is empty
-  for(int i = 0; i< 10; i++)
-  {
-    loop_antplus();
-  }
+  loop_antplus();
   
-  int debug_delay_ms = 1200;
+  //int debug_delay_ms = 1200;
 
   //Get the ANT+ channels up quickly
   // then send some display messages
@@ -1046,13 +1039,15 @@ void loop()
   {
     loop_display();
   }
-  else
-  {
-    //debug_delay_ms = 50;
-  }
   
-
+  //TODO: Investigate
+  //There needs to be a delay here in order to have this work with H/W UART
+  //Seems we are losing a lot of receptions....
+  //Need to see how many packets are getting through etc
+  
+#if 0
   {
+    //TODO: Put this debug function on when the display is otherwise asleep
     //Number cycling will happen whilst the channels are starting up
     //static byte counter = 0;
     mydisplay.shutdown(0, false);  // Turns on display
@@ -1070,5 +1065,6 @@ void loop()
     my_delay_function( debug_delay_ms );
     mydisplay.clearDisplay(0);
   }
+#endif
 }
 
