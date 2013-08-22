@@ -57,17 +57,11 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 #endif
 
 
-//When this is set -- Strings are not random, just to check things...
 //#define LOOP_TEXT //<! A debugging mode that makes the strings displayed sequential (instead of random).
-//#define DISPLAY_DURATION_MS (1200)  //!< This is the display time for 8 characters. Scrolling takes longer (not quite linear increase).
-//#define DELAY_BETWEEN_DISPLAYS_MS (1200) //<! Duration to have screen shut down between displaying messages
-//TODO:
-#define DISPLAY_DURATION_MS (500)  //!< This is the display time for 8 characters. Scrolling takes longer (not quite linear increase).
-#define DELAY_BETWEEN_DISPLAYS_MS (200) //<! Duration to have screen shut down between displaying messages
-
-
+#define DISPLAY_DURATION_MS (1200)  //!< This is the display time for 8 characters. Scrolling takes longer (not quite linear increase).
+#define DELAY_BETWEEN_DISPLAYS_MS (1200) //<! Duration to have screen shut down between displaying messages
 #define DISPLAY_INTENSITY (12) //<! 0..15
-//#define DISPLAY_INTENSITY (15) //<! 0..15
+
 
 //Logging macros
 //********************************************************************
