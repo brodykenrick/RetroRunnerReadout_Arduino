@@ -67,12 +67,12 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 #define USE_SERIAL_CONSOLE //!<Use the hardware serial as the console
 #define CONSOLE_BAUD_RATE (115200)
 
-#define LOOP_TEXT //<! A debugging mode that makes the strings displayed sequential (instead of random).
+//#define LOOP_TEXT //<! A debugging mode that makes the strings displayed sequential (instead of random).
 
 
 #define DISPLAY_DURATION_MS (1200)  //!< This is the display time for 8 characters. Scrolling takes longer (not quite linear increase).
 #define DELAY_BETWEEN_DISPLAYS_MS (1400) //<! Duration to have screen shut down between displaying messages
-#define DISPLAY_INTENSITY (12) //<! 0..15
+#define DISPLAY_INTENSITY (15) //<! 0..15
 
 
 #if defined(NDEBUG) || defined(ANTPLUS_ON_HW_UART)
@@ -640,7 +640,7 @@ void get_text_from_pm_char_ptr_array(char dst_text[], int dst_text_size, /*PROGM
 
 //Will either return the incoming text if no replacement happens
 //Or do the replacement and return the changed text in replace_text
-//TODO: Add some string safety ( replace_text_size is !56 though -- so pretty safe... )
+//TODO: Add some string safety ( replace_text_size is 56 though -- so pretty safe... )
 const char * replace_special_strings(const char * const text, char * const replace_text, int replace_text_size)
 {
   const char * ret_text = text;
@@ -745,8 +745,7 @@ const char * replace_special_strings(const char * const text, char * const repla
     itoa(gReceivedSDMData, replace_text + strlen(replace_text), 10);
     ret_text = replace_text;
   }
-  
-  
+
   return ret_text;
 }
 
@@ -1052,10 +1051,10 @@ void setup()
   Narcoleptic.disableTimer2();
 //  Narcoleptic.disableTimer1(); //Needed for SPI
 //  Narcoleptic.disableMillis();
-#if !defined(USE_SERIAL_CONSOLE)
-  //Don't need serial if not debugging [NOTE: This may have implications later on USART usage...]
-//TODO:XXX:Come back to this  Narcoleptic.disableSerial();
-#endif //!defined(USE_SERIAL_CONSOLE)
+#if !(defined(USE_SERIAL_CONSOLE) || defined(ANTPLUS_ON_HW_UART))
+  //Don't need serial if not debugging nor using the hardware USART usage.
+  Narcoleptic.disableSerial();
+#endif
   Narcoleptic.disableADC();
 
 #endif
