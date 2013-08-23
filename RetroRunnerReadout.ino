@@ -2,13 +2,20 @@
 http://retrorunnerreadout.blogspot.com
 Copyright 2013 Brody Kenrick.
 
-Interfacing of a cheap Nordic nRF24AP (ANT+) UART module to an Arduino and an 8 character 7-segment display module (using MAX7219).
+Interfacing of Garmin ANT+ device (via a cheap Nordic nRF24AP UART module) to an Arduino and an 8 character 7-segment display module (using MAX7219).
 
+The code runs through a loop of strings. Each of these are displayed on the 7-segment display. Some of these
+strings are dynamically replaced with other strings. The dynamic strings consist of different groups. Some are
+names of friends/supporters. Others are motivational/funny quotes. A further group are information about the run
+taking place -- these include distance expected today, distance so far today, distance left, strides taken, current
+heart rate etc.
+
+
+Hardware
 An Arduino Pro Mini 3v3
 This nRF24AP2 module : http://www.goodluckbuy.com/nrf24ap2-networking-module-zigbee-module-with-ant-transceiver-.html
 This 7-segment display : http://dx.com/p/8-segment-led-display-board-module-for-arduino-147814
 Batteries, a 5V regulator and a level converter (http://www.freetronics.com/products/logic-level-converter-module)
-
 
 The connector on nRF24AP2 board is (looking from the front, pin 1 is marked []):
 []GND(=VSS) | VDD(=3.3 volts)
@@ -40,6 +47,7 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 #define USE_NARCOLEPTIC_DISABLE //<! Use Narcoleptic to save some battery with disabling certain items but not use narco delay....
 
 //#define ANTPLUS_ON_HW_UART //!< H/w UART (i.e. Serial) instead of software serial
+//Seems to be issues in not getting as many broadcast packets when using hardware serial.........
 
 
 #if (defined(USE_NARCOLEPTIC_DELAY) || defined(USE_NARCOLEPTIC_DISABLE))
@@ -63,7 +71,7 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 
 
 #define DISPLAY_DURATION_MS (1200)  //!< This is the display time for 8 characters. Scrolling takes longer (not quite linear increase).
-#define DELAY_BETWEEN_DISPLAYS_MS (1200) //<! Duration to have screen shut down between displaying messages
+#define DELAY_BETWEEN_DISPLAYS_MS (1400) //<! Duration to have screen shut down between displaying messages
 #define DISPLAY_INTENSITY (12) //<! 0..15
 
 
@@ -142,10 +150,15 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 #define BPM_REPLACE             ("BPM_REP")
 #define STRIDE_COUNT_REPLACE    ("SC_REP")
 
+#define DEBUG_RX_REPLACE    ("DBRX_REP")
+#define DEBUG_TX_REPLACE    ("DBTX_REP")
+#define DEBUG_RXDP_REPLACE    ("DBRXDP_REP")
+
+
 #define MAX_CHARS_TO_DISPLAY (56)
 #define MAX_CHARS_TO_DISPLAY_STR (MAX_CHARS_TO_DISPLAY+1) //'\0' terminated
 
-#define ANTPLUS_BAUD_RATE (9600)
+#define ANTPLUS_BAUD_RATE (9600) //!< The moduloe I am using is hardcoded to this baud rate.
 
 //TODO: Do not publish.....
 #define ANT_SENSOR_NETWORK_KEY {0xb9, 0xa5, 0x21, 0xfb, 0xbd, 0x72, 0xc3, 0x45}
@@ -184,12 +197,12 @@ static LedControl     mydisplay = LedControl(11/*DIN:MOSI*/, 13/*CLK:SCK*/, 10/*
 static ANT_Channel hrm_channel =
 {
   0,//channel_number
-  0,//network_number   -- public
-  12,//timeout         -- 12 * 2.5 = 30 seconds
-  DEVCE_TYPE_HRM,//device_type    -- bit 7 = 0 pairing request bits 6..0 = 120 for HRM
-  57,//freq            -- Garmin radio frequency
-  32280,//period       -- Lowest sampling allowed for HRM
-  ANT_SENSOR_NETWORK_KEY, //ant_net_key
+  PUBLIC_NETWORK,
+  DEVCE_TIMEOUT,
+  DEVCE_TYPE_HRM,
+  DEVCE_SENSOR_FREQ,
+  DEVCE_HRM_LOWEST_RATE,
+  ANT_SENSOR_NETWORK_KEY,
   0, //state_counter
 };
 
@@ -197,24 +210,24 @@ static ANT_Channel hrm_channel =
 static ANT_Channel fr410_channel =
 {
   1,//channel_number
-  0,//network_number   -- public
-  12,//timeout         -- 12 * 2.5 = 30 seconds
-  DEVCE_TYPE_GPS,//device_type    -- 
-  50,//freq            -- Garmin radio frequency
-  8070,//period        -- 
-  ANT_GPS_NETWORK_KEY, //ant_net_key
+  PUBLIC_NETWORK,
+  DEVCE_TIMEOUT,
+  DEVCE_TYPE_GPS,
+  DEVCE_GPS_FREQ,
+  DEVCE_GPS_RATE,
+  ANT_GPS_NETWORK_KEY,
   0, //state_counter
 };
 
 static ANT_Channel cadence_channel =
 {
   2,//channel_number
-  0,//network_number   -- public
-  12,//timeout         -- 12 * 2.5 = 30 seconds
-  DEVCE_TYPE_CADENCE,//device_type    -- 
-  50,//freq            -- Garmin radio frequency
-  8085,//period        -- 
-  ANT_SENSOR_NETWORK_KEY, //ant_net_key
+  PUBLIC_NETWORK,
+  DEVCE_TIMEOUT,
+  DEVCE_TYPE_CADENCE,
+  DEVCE_SENSOR_FREQ,
+  DEVCE_CADENCE_RATE,
+  ANT_SENSOR_NETWORK_KEY,
   0, //state_counter
 };
 #endif
@@ -223,12 +236,12 @@ static ANT_Channel cadence_channel =
 static ANT_Channel sdm_channel =
 {
   4,//channel_number
-  0,//network_number   -- public
-  12,//timeout         -- 12 * 2.5 = 30 seconds
-  DEVCE_TYPE_SDM,//device_type    -- bit 7 = 0 pairing request bits 6..0 = 124 for HRM
-  57,//freq            -- Garmin radio frequency
-  16268,//period       -- Lowest sampling allowed for SDM
-  ANT_SENSOR_NETWORK_KEY, //ant_net_key
+  PUBLIC_NETWORK,
+  DEVCE_TIMEOUT,
+  DEVCE_TYPE_SDM,
+  DEVCE_SENSOR_FREQ,
+  DEVCE_SDM_LOWEST_RATE,
+  ANT_SENSOR_NETWORK_KEY,
   0, //state_counter
 };
 
@@ -316,6 +329,12 @@ const char loop_text_LEFT[] PROGMEM   = DISTANCE_LEFT_REPLACE;
 const char loop_text_BPM[] PROGMEM    = BPM_REPLACE;
 const char loop_text_STRIDES[] PROGMEM= STRIDE_COUNT_REPLACE;
 
+const char loop_text_DEBUG_RX[] PROGMEM= DEBUG_RX_REPLACE;
+const char loop_text_DEBUG_TX[] PROGMEM= DEBUG_TX_REPLACE;
+const char loop_text_DEBUG_RXDP[] PROGMEM= DEBUG_RXDP_REPLACE;
+
+
+
 PROGMEM const char * const loop_texts[] =
 {
 #if defined(LOOP_TEXT)
@@ -325,6 +344,10 @@ PROGMEM const char * const loop_texts[] =
   loop_text_STRIDES,
   loop_text_DONE,
   loop_text_LEFT,
+  //Only in LOOP_TEXT mode
+  loop_text_DEBUG_RX,
+  loop_text_DEBUG_TX,
+  loop_text_DEBUG_RXDP,
 #else
   loop_text_00,
   loop_text_00a,
@@ -552,6 +575,36 @@ unsigned long my_millis_function()
 //Function allowing the LED library to do a callback to our delay functions
 void my_delay_function(unsigned long duration_ms)
 {
+  //SERIAL_DEBUG_PRINT( (serial_print_int_padded_dec(my_millis_function(), 8)) );
+  SERIAL_DEBUG_PRINT( my_millis_function() );
+  SERIAL_DEBUG_PRINT_F( " @ delay " );
+  SERIAL_DEBUG_PRINT( duration_ms );
+  SERIAL_DEBUG_PRINTLN_F( " ms" );
+#if 0
+  if(duration_ms >= DELAY_BETWEEN_DISPLAYS_MS)
+  {
+      my_delay_function( 150 );
+
+      mydisplay.shutdown(0, false);  // Turns on display
+      mydisplay.clearDisplay(0);
+      mydisplay.setChar(0, 0, antplus.rx_packet_count%0xF, true);
+      mydisplay.setChar(0, 1, antplus.rx_packet_count%0xF0>>4, false);
+      mydisplay.setChar(0, 2, antplus.tx_packet_count%0xF, true);
+      mydisplay.setChar(0, 3, antplus.tx_packet_count%0xF0>>4, false);
+  
+      mydisplay.setChar(0, 4, hrm_channel.state_counter%0xF, gReceivedHRMData);
+      mydisplay.setChar(0, 5, sdm_channel.state_counter%0xF, gReceivedSDMData);
+      mydisplay.setChar(0, 6, ' ', false);
+      mydisplay.setChar(0, 7, antplus.hw_reset_count, true);
+
+      my_delay_function( duration_ms -150 -150 );      
+      
+      mydisplay.clearDisplay(0);
+      
+      my_delay_function( 150 );
+  }
+#endif
+  
   //TODO: Perhaps add in a loop_antplus here if duration is large-ish
 #if defined(USE_NARCOLEPTIC_DELAY)
 #if defined(USE_SERIAL_CONSOLE)
@@ -587,7 +640,8 @@ void get_text_from_pm_char_ptr_array(char dst_text[], int dst_text_size, /*PROGM
 
 //Will either return the incoming text if no replacement happens
 //Or do the replacement and return the changed text in replace_text
-const char * replace_special_strings(const char * const text, char * const replace_text)
+//TODO: Add some string safety ( replace_text_size is !56 though -- so pretty safe... )
+const char * replace_special_strings(const char * const text, char * const replace_text, int replace_text_size)
 {
   const char * ret_text = text;
   if(!strcmp(text, DISTANCE_LEFT_REPLACE))
@@ -597,30 +651,28 @@ const char * replace_special_strings(const char * const text, char * const repla
       itoa(metres_left / 1000, replace_text, 10);
       strcat (replace_text,".");
       itoa(metres_left % 1000, replace_text + strlen(replace_text), 10);
-
       strcat (replace_text," to go");
     }
     else
     {
-      strcpy (replace_text,"Finished!");
+      strcpy (replace_text,"Finished");
     }
     ret_text = replace_text;
   }
   else
   if(!strcmp(text, DISTANCE_DONE_REPLACE))  
   {
-    itoa(gCumulativeDistance / 1000, replace_text, 10);
+    unsigned long distance_done_display = min(gCumulativeDistance,metres_today);
+    itoa(distance_done_display / 1000, replace_text, 10);
     strcat (replace_text,".");
-    itoa(gCumulativeDistance % 1000, replace_text + strlen(replace_text), 10);
-    
+    itoa(distance_done_display % 1000, replace_text + strlen(replace_text), 10);
     strcat (replace_text," done");
-    
     ret_text = replace_text;
   }
   else
   if(!strcmp(text, STRIDE_COUNT_REPLACE))  
   {
-    itoa(gCumulativeStrideCount, replace_text, 10);
+    ltoa(gCumulativeStrideCount, replace_text, 10);
     strcat (replace_text," strides");
     ret_text = replace_text;
   }
@@ -670,6 +722,30 @@ const char * replace_special_strings(const char * const text, char * const repla
       ret_text = "Be Heart SMart!";
     }
   }
+  else
+  if(!strcmp(text, DEBUG_RX_REPLACE))
+  {
+    itoa(antplus.rx_packet_count, replace_text, 10);
+    strcat (replace_text," Rx");
+    ret_text = replace_text;
+  }
+  else
+  if(!strcmp(text, DEBUG_TX_REPLACE))  
+  {
+    itoa(antplus.tx_packet_count, replace_text, 10);
+    strcat (replace_text," Tx");
+    ret_text = replace_text;
+  }
+  else
+  if(!strcmp(text, DEBUG_RXDP_REPLACE))  
+  {
+    strcat (replace_text,"HRM=");
+    itoa(gReceivedHRMData, replace_text + strlen(replace_text), 10);
+    strcat (replace_text," - SDM=");
+    itoa(gReceivedSDMData, replace_text + strlen(replace_text), 10);
+    ret_text = replace_text;
+  }
+  
   
   return ret_text;
 }
@@ -688,7 +764,7 @@ void adjust_string(const char * text, char * out_text, boolean * out_decimals)
   //SERIAL_DEBUG_PRINTLN( text );
 
   //Replace motivation or name strings etc
-  text = replace_special_strings(text, replace_text);
+  text = replace_special_strings(text, replace_text, MAX_CHARS_TO_DISPLAY_STR);
   SERIAL_DEBUG_PRINT_F( "Adj. = " );
   SERIAL_DEBUG_PRINTLN( text );
 
@@ -876,7 +952,7 @@ void loop_display()
 
 void loop_antplus()
 {
-  byte packet_buffer[MAXPACKETLEN];
+  byte packet_buffer[ANT_MAX_PACKET_LEN];
   ANT_Packet * packet = (ANT_Packet *) packet_buffer;
   MESSAGE_READ ret_val = MESSAGE_READ_NONE;
   
@@ -891,7 +967,7 @@ void loop_antplus()
   }
 
   //Read messages until we get a none
-  while( (ret_val = antplus.readPacket(packet, MAXPACKETLEN, 0 )) != MESSAGE_READ_NONE )
+  while( (ret_val = antplus.readPacket(packet, ANT_MAX_PACKET_LEN, 0 )) != MESSAGE_READ_NONE )
   {
     if((ret_val == MESSAGE_READ_EXPECTED) || (ret_val == MESSAGE_READ_OTHER))
     {
@@ -1011,13 +1087,8 @@ void setup()
   antplus.begin( ant_serial );
 #endif
 
-  //This should not be strictly necessary - the device should always come up by itself....
-  //But let's make sure we didn't miss the first RTS in a power-up race
-  antplus.hardwareReset();
-
   SERIAL_DEBUG_PRINTLN_F("ANT+ Config Finished.");
   SERIAL_INFO_PRINTLN_F("Setup Finished.");
-  
 }
 
 // **************************************************************************************************
@@ -1029,7 +1100,7 @@ void loop()
 {
   loop_antplus();
   
-  //int debug_delay_ms = 1200;
+  
 
   //Get the ANT+ channels up quickly
   // then send some display messages
@@ -1039,32 +1110,5 @@ void loop()
   {
     loop_display();
   }
-  
-  //TODO: Investigate
-  //There needs to be a delay here in order to have this work with H/W UART
-  //Seems we are losing a lot of receptions....
-  //Need to see how many packets are getting through etc
-  
-#if 0
-  {
-    //TODO: Put this debug function on when the display is otherwise asleep
-    //Number cycling will happen whilst the channels are starting up
-    //static byte counter = 0;
-    mydisplay.shutdown(0, false);  // Turns on display
-    mydisplay.clearDisplay(0);
-//    mydisplay.setChar(0, 0, counter++%0xF, false);
-    mydisplay.setChar(0, 0, antplus.rx_packet_count%0xF, true);
-    mydisplay.setChar(0, 1, antplus.rx_packet_count%0xF0>>4, false);
-    mydisplay.setChar(0, 2, antplus.tx_packet_count%0xF, true);
-    mydisplay.setChar(0, 3, antplus.tx_packet_count%0xF0>>4, false);
-
-    mydisplay.setChar(0, 4, hrm_channel.state_counter%0xF, true);
-    mydisplay.setChar(0, 5, gReceivedHRMData, true);
-    mydisplay.setChar(0, 6, sdm_channel.state_counter%0xF, true);
-    mydisplay.setChar(0, 7, gReceivedSDMData, true);
-    my_delay_function( debug_delay_ms );
-    mydisplay.clearDisplay(0);
-  }
-#endif
 }
 
