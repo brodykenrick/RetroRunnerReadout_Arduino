@@ -63,7 +63,7 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 #define USE_SERIAL_CONSOLE //!<Use the hardware serial as the console. This needs to be off if using hardware serial for driving the ANT+ module.
 #define CONSOLE_BAUD_RATE (115200)
 
-#define LOOP_TEXT //<! A debugging mode that makes the strings displayed sequential (instead of random).
+//#define LOOP_TEXT //<! A debugging mode that makes the strings displayed sequential (instead of random).
 
 
 #define DISPLAY_DURATION_MS (1300)  //!< This is the display time for 8 characters. Scrolling takes longer (not quite linear increase).
@@ -157,11 +157,15 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 
 #define ANTPLUS_BAUD_RATE (9600) //!< The moduloe I am using is hardcoded to this baud rate.
 
-//TODO: Do not publish.....
+
+//The ANT+ network keys are not allowed to be published so they are stripped from here.
+//They are available in the ANT+ docs at thisisant.com
 #define ANT_SENSOR_NETWORK_KEY {0xb9, 0xa5, 0x21, 0xfb, 0xbd, 0x72, 0xc3, 0x45}
 #define ANT_GPS_NETWORK_KEY    {0xa8, 0xa4, 0x23, 0xb9, 0xf5, 0x5e, 0x63, 0xc1}
 
-
+#if !defined( ANT_SENSOR_NETWORK_KEY ) || !defined(ANT_GPS_NETWORK_KEY)
+#error "The Network Keys are missing. Better go find them by signing up at thisisant.com"
+#endif
 
 // ****************************************************************************
 // ******************************  GLOBALS  ***********************************
@@ -185,6 +189,7 @@ static LedControl     mydisplay = LedControl(11/*DIN:MOSI*/, 13/*CLK:SCK*/, 10/*
 
 
 //ANT Channels for various device types
+#if 0
 static ANT_Channel hrm_channel =
 {
   ANT_CHANNEL_NUMBER_INVALID,
@@ -227,7 +232,7 @@ static ANT_Channel cadence_channel =
   FALSE,
   0, //state_counter
 };
-
+#endif
 
 //Garmin Footpod
 static ANT_Channel sdm_channel =
@@ -248,7 +253,7 @@ static ANT_Channel sdm_channel =
 //This is how we tell the system which channels to establish
 static ANT_Channel * channels_to_setup[ANT_DEVICE_NUMBER_CHANNELS] =
 {
-  &hrm_channel,
+  &sdm_channel,
   NULL,
   NULL,
   NULL,
@@ -257,8 +262,6 @@ static ANT_Channel * channels_to_setup[ANT_DEVICE_NUMBER_CHANNELS] =
   NULL,
   NULL
 };
-
-
 
 
 volatile int rts_ant_received = 0; //!< ANT RTS interrupt flag see isr_rts_ant()
@@ -383,16 +386,8 @@ const char names_text_09[] PROGMEM = "Annie ";
 
 PROGMEM const char * const names_texts[] =
 {
-  names_text_00,
-  names_text_01,
-  names_text_02,
-  names_text_03,
-  names_text_04,
-  names_text_05,
-  names_text_06,
-  names_text_07,
-  names_text_08,
-  names_text_09,
+  names_text_00, names_text_01, names_text_02, names_text_03, names_text_04,
+  names_text_05, names_text_06, names_text_07, names_text_08, names_text_09,
 };
 #define NAMES_TEXTS_COUNT ( sizeof(names_texts)/sizeof(names_texts[0]) )
 
@@ -468,51 +463,16 @@ const char motivates_text_43[] PROGMEM = "Ouch!!";
 
 PROGMEM const char * const motivates_texts[] =
 {
-  motivates_text_00,
-  motivates_text_01,
-  motivates_text_02,
-  motivates_text_03,
-  motivates_text_04,
-  motivates_text_05,
-  motivates_text_06,
-  motivates_text_07,
-  motivates_text_08,
-  motivates_text_09,
-  motivates_text_10,
-  motivates_text_11,
-  motivates_text_12,
-  motivates_text_13,
-//  motivates_text_14,
-  motivates_text_15,
-  motivates_text_16,
-  motivates_text_17,
-  motivates_text_18,
-  motivates_text_19,
-  motivates_text_20,
-  motivates_text_21,
-//  motivates_text_22,
-  motivates_text_23,
-  motivates_text_24,
-  motivates_text_25,
-  motivates_text_26,
-//  motivates_text_27,
-//  motivates_text_28,
-  motivates_text_29,
-  motivates_text_30,
-  motivates_text_31,
-  motivates_text_32,
-//  motivates_text_33,
-//  motivates_text_34,
-  motivates_text_35,
-  motivates_text_36,
-  motivates_text_37,
-//  motivates_text_38,
-  motivates_text_39,
-  motivates_text_40,
-  motivates_text_41,
-  motivates_text_42,
-  motivates_text_43,
-//  motivates_text_44,
+  motivates_text_00, motivates_text_01, motivates_text_02, motivates_text_03, motivates_text_04,
+  motivates_text_05, motivates_text_06, motivates_text_07, motivates_text_08, motivates_text_09,
+  motivates_text_10, motivates_text_11, motivates_text_12, motivates_text_13,/*motivates_text_14,*/
+  motivates_text_15, motivates_text_16, motivates_text_17, motivates_text_18, motivates_text_19,
+  motivates_text_20, motivates_text_21,/*motivates_text_22,*/ motivates_text_23, motivates_text_24,
+  motivates_text_25, motivates_text_26,/*motivates_text_27,*//*motivates_text_28,*/ motivates_text_29,
+  motivates_text_30, motivates_text_31, motivates_text_32,/*motivates_text_33,*//*motivates_text_34,*/
+  motivates_text_35, motivates_text_36, motivates_text_37,/* motivates_text_38,*/ motivates_text_39,
+  motivates_text_40, motivates_text_41, motivates_text_42, motivates_text_43,
+// motivates_text_44,
 //  motivates_text_45,
 //  motivates_text_46,
 //  motivates_text_47,
@@ -535,52 +495,6 @@ void isr_rts_ant()
 
 // **************************************************************************************************
 // **********************************  Helper *******************************************************
-// **************************************************************************************************
-
-//TODO: Look to see if there is a way to force Serial to become a subclass that is extended with padded functions (as Serial is created on startup somewhere...)
-void serial_print_byte_padded_hex(byte value)
-{
-#if defined(USE_SERIAL_CONSOLE)
-  if(value <= 0x0F)
-  {
-      Serial.print(0, HEX);
-  }
-  Serial.print(value, HEX);
-#endif //defined(USE_SERIAL_CONSOLE)
-}
-
-void serial_print_int_padded_dec( int number, byte width, boolean final_carriage_return )
-{
-#if defined(USE_SERIAL_CONSOLE)
-  int div_num = number;
-  int div_cnt = 0;
-  while( div_num /= 10 )
-  {
-    div_cnt++;
-  }
-  if(div_cnt < width)
-  {
-    div_cnt = width - div_cnt - 1;
-  }
-  else
-  {
-    div_cnt = 0;
-  }
-  while( div_cnt-- )
-  {
-    Serial.print("0");
-  }
-  if(final_carriage_return)
-  {
-    Serial.println(number);
-  }
-  else
-  {
-    Serial.print(number);
-  }
-#endif //defined(USE_SERIAL_CONSOLE)
-}
-
 // **************************************************************************************************
 
 unsigned long my_millis_function()
@@ -613,9 +527,6 @@ void my_delay_function(unsigned long duration_ms)
       mydisplay.setChar(0, 2, antplus.tx_packet_count%0xF, true);
       mydisplay.setChar(0, 3, antplus.tx_packet_count%0xF0>>4, false);
   
-      mydisplay.setChar(0, 4, hrm_channel.state_counter%0xF, rx_HRM_data);
-      mydisplay.setChar(0, 5, sdm_channel.state_counter%0xF, rx_SDM_data);
-      mydisplay.setChar(0, 6, ' ', false);
       mydisplay.setChar(0, 7, antplus.hw_reset_count, true);
 
       my_delay_function( duration_ms -150 -150 );      
@@ -659,7 +570,8 @@ void get_text_from_pm_char_ptr_array(char dst_text[], int dst_text_size, /*PROGM
 // **********************************  Display  *****************************************************
 // **************************************************************************************************
 
-//"42.001"
+//Prints a distance with zeroes after the decimal place "42.001"
+//TODO: Add some string safety ( replace_text_size is 56 though -- so pretty safe... )
 void put_km_distance_in_string(unsigned long distance, char * const replace_text)
 {
   //add kilometer part
