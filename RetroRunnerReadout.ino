@@ -41,13 +41,11 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 #include <assert.h>
 
 //#define USE_NARCOLEPTIC_DELAY //<! Use Narcoleptic to save battery with power down sleep (vs. busy delay())
-//Can't use this and ANTPlus because of software serial
+//NOTE: This won't work with ANT+ as it uses serial. Software serial requires a fully operating system. Hardware serial will wake the system if in IDLE.
 //TODO: Need to rework and use IDLE mode and HardwareSerial for the ANTPlus instead...
-//NOTE: Narcoleptic.disableSerial() might impact above.....
 #define USE_NARCOLEPTIC_DISABLE //<! Use Narcoleptic to save some battery with disabling certain items but not use narco delay....
 
-//#define ANTPLUS_ON_HW_UART //!< H/w UART (i.e. Serial) instead of software serial
-//Seems to be issues in not getting as many broadcast packets when using hardware serial.........
+//#define ANTPLUS_ON_HW_UART //!< H/w UART (i.e. Serial) instead of software serial. NOTE: There seems to be issues in not getting as many broadcast packets when using hardware serial (likely related to SPI and interrupt servicing taking too long).........
 
 
 #if (defined(USE_NARCOLEPTIC_DELAY) || defined(USE_NARCOLEPTIC_DISABLE))
@@ -62,12 +60,10 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 #include <ANTPlus.h>
 
 
-
-//TODO: Later when we swap to hardware serial then there can be no console.....
-#define USE_SERIAL_CONSOLE //!<Use the hardware serial as the console
+#define USE_SERIAL_CONSOLE //!<Use the hardware serial as the console. This needs to be off if using hardware serial for driving the ANT+ module.
 #define CONSOLE_BAUD_RATE (115200)
 
-//#define LOOP_TEXT //<! A debugging mode that makes the strings displayed sequential (instead of random).
+#define LOOP_TEXT //<! A debugging mode that makes the strings displayed sequential (instead of random).
 
 
 #define DISPLAY_DURATION_MS (1300)  //!< This is the display time for 8 characters. Scrolling takes longer (not quite linear increase).
@@ -146,10 +142,11 @@ Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 #define DISTANCE_DONE_REPLACE   ("DONE_REP")
 #define DISTANCE_TODAY_REPLACE  ("TODAY_REP")
 #define NAME_REPLACE            ("NAME_REP")
+#define PRE_NAME_REPLACE        ("PNAME_REP")
 #define MOTIVATE_REPLACE        ("MOTV_REP")
 #define BPM_REPLACE             ("BPM_REP")
 #define STRIDE_COUNT_REPLACE    ("SC_REP")
-
+#define SPEED_REPLACE           ("SPD_REP")
 #define DEBUG_RX_REPLACE        ("DBRX_REP")
 #define DEBUG_TX_REPLACE        ("DBTX_REP")
 #define DEBUG_RXDP_REPLACE      ("DBRXDP_REP")
@@ -180,7 +177,7 @@ static const int TX_PIN       = 8; //Using software serial for the UART
 static const int RX_PIN       = 9; //Ditto
 static SoftwareSerial ant_serial(TX_PIN, RX_PIN); // RXArd, TXArd -- Arduino is opposite to nRF24AP2 module
 #else
-//Using Serial instead
+//Using Hardware Serial (0,1) instead
 #endif
 
 static ANTPlus        antplus   = ANTPlus(RTS_PIN, 3/*SUSPEND*/, 4/*SLEEP*/, 5/*RESET*/ );
@@ -190,90 +187,95 @@ static LedControl     mydisplay = LedControl(11/*DIN:MOSI*/, 13/*CLK:SCK*/, 10/*
 //ANT Channels for various device types
 static ANT_Channel hrm_channel =
 {
-  0,//channel_number
+  ANT_CHANNEL_NUMBER_INVALID,
   PUBLIC_NETWORK,
   DEVCE_TIMEOUT,
   DEVCE_TYPE_HRM,
   DEVCE_SENSOR_FREQ,
   DEVCE_HRM_LOWEST_RATE,
   ANT_SENSOR_NETWORK_KEY,
+  ANT_CHANNEL_ESTABLISH_PROGRESSING,
+  FALSE,
   0, //state_counter
 };
 
-#if 0
+
 static ANT_Channel fr410_channel =
 {
-  1,//channel_number
+  ANT_CHANNEL_NUMBER_INVALID,
   PUBLIC_NETWORK,
   DEVCE_TIMEOUT,
   DEVCE_TYPE_GPS,
   DEVCE_GPS_FREQ,
   DEVCE_GPS_RATE,
   ANT_GPS_NETWORK_KEY,
+  ANT_CHANNEL_ESTABLISH_PROGRESSING,
+  FALSE,
   0, //state_counter
 };
 
 static ANT_Channel cadence_channel =
 {
-  2,//channel_number
+  ANT_CHANNEL_NUMBER_INVALID,
   PUBLIC_NETWORK,
   DEVCE_TIMEOUT,
   DEVCE_TYPE_CADENCE,
   DEVCE_SENSOR_FREQ,
   DEVCE_CADENCE_RATE,
   ANT_SENSOR_NETWORK_KEY,
+  ANT_CHANNEL_ESTABLISH_PROGRESSING,
+  FALSE,
   0, //state_counter
 };
-#endif
 
-//Garmin footpod
+
+//Garmin Footpod
 static ANT_Channel sdm_channel =
 {
-  4,//channel_number
+  ANT_CHANNEL_NUMBER_INVALID,
   PUBLIC_NETWORK,
   DEVCE_TIMEOUT,
   DEVCE_TYPE_SDM,
   DEVCE_SENSOR_FREQ,
   DEVCE_SDM_LOWEST_RATE,
   ANT_SENSOR_NETWORK_KEY,
+  ANT_CHANNEL_ESTABLISH_PROGRESSING,
+  FALSE,
   0, //state_counter
 };
 
 
-//TODO: Make this dynamic later on
-//channel_device[sdm_channel.channel_number] = sdm_channel.device_type;
-//channel_device[hrm_channel.channel_number] = hrm_channel.device_type;
-//These match the ANT_Channel channel numbers above
-static byte channel_device[ANT_DEVICE_NUMBER_CHANNELS] = {
-  DEVCE_TYPE_HRM,
-  DEVCE_TYPE_GPS,
-  0,
-  0,
-  DEVCE_TYPE_SDM,
-  0,
-  0,
-  0
+//This is how we tell the system which channels to establish
+static ANT_Channel * channels_to_setup[ANT_DEVICE_NUMBER_CHANNELS] =
+{
+  &hrm_channel,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL
 };
 
-//TODO: Consider putting this in the ANT_Channel struct
-static ANT_CHANNEL_ESTABLISH ret_val_ce_hrm = ANT_CHANNEL_ESTABLISH_PROGRESSING;
-static ANT_CHANNEL_ESTABLISH ret_val_ce_sdm = ANT_CHANNEL_ESTABLISH_PROGRESSING;
+
+
 
 volatile int rts_ant_received = 0; //!< ANT RTS interrupt flag see isr_rts_ant()
 
-static long unsigned int metres_today  = 42195;
+static const long unsigned int metres_today  = 35000; //= 42195;
 static long unsigned int metres_left   = metres_today;
 
-static boolean rx_HRM_data = false;
-static boolean rx_SDM_data = false;
+static int last_computed_heart_rate      = -1;
 
-static int last_computed_heart_rate = -1;
+static int last_inst_speed_int_mps       = -1;
+static int last_inst_speed_frac_mps_d256 = -1;
 
 static unsigned long int cumulative_distance      = 0;
-static int               prev_msg_distance = -1;
+static int               prev_msg_distance        = -1;
 
-static unsigned long int cumulative_stride_count      = 0;
-static int               prev_msg_stride_count = -1;
+static unsigned long int cumulative_stride_count  = 0;
+static int               prev_msg_stride_count    = -1;
 
 //Used in setup and then in loop -- save stack on this big variable by using globals
 static char    adjusted_text[MAX_CHARS_TO_DISPLAY_STR] = "";
@@ -313,31 +315,34 @@ PROGMEM const char * const startup_texts[] =
 
 // ****************************************************************************
 
-const char loop_text_00[] PROGMEM     = "CanToo ";
-const char loop_text_00a[] PROGMEM    = "Cure Cancer";
-const char loop_text_01[] PROGMEM     = DISTANCE_TODAY_REPLACE;
-const char loop_text_04[] PROGMEM     = " Run  ";
-const char loop_text_NAME[] PROGMEM   = NAME_REPLACE;
-const char loop_text_MOTIV8[] PROGMEM = MOTIVATE_REPLACE;
-const char loop_text_07[] PROGMEM     = "Do It ";
-const char loop_text_DONE[] PROGMEM   = DISTANCE_DONE_REPLACE;
-const char loop_text_LEFT[] PROGMEM   = DISTANCE_LEFT_REPLACE;
-const char loop_text_BPM[] PROGMEM    = BPM_REPLACE;
-const char loop_text_STRIDES[] PROGMEM= STRIDE_COUNT_REPLACE;
+const char loop_text_00[] PROGMEM         = "CanToo ";
+const char loop_text_00a[] PROGMEM        = "Cure Cancer";
+const char loop_text_01[] PROGMEM         = DISTANCE_TODAY_REPLACE;
+const char loop_text_PRE_NAME[] PROGMEM   = PRE_NAME_REPLACE;
+const char loop_text_NAME[] PROGMEM       = NAME_REPLACE;
+const char loop_text_MOTIV8[] PROGMEM     = MOTIVATE_REPLACE;
+const char loop_text_DONE[] PROGMEM       = DISTANCE_DONE_REPLACE;
+const char loop_text_LEFT[] PROGMEM       = DISTANCE_LEFT_REPLACE;
+const char loop_text_BPM[] PROGMEM        = BPM_REPLACE;
+const char loop_text_STRIDES[] PROGMEM    = STRIDE_COUNT_REPLACE;
+const char loop_text_SPEED[] PROGMEM      = SPEED_REPLACE;
 
-const char loop_text_DEBUG_RX[] PROGMEM= DEBUG_RX_REPLACE;
-const char loop_text_DEBUG_TX[] PROGMEM= DEBUG_TX_REPLACE;
-const char loop_text_DEBUG_RXDP[] PROGMEM= DEBUG_RXDP_REPLACE;
+
+const char loop_text_DEBUG_RX[] PROGMEM   = DEBUG_RX_REPLACE;
+const char loop_text_DEBUG_TX[] PROGMEM   = DEBUG_TX_REPLACE;
+const char loop_text_DEBUG_RXDP[] PROGMEM = DEBUG_RXDP_REPLACE;
 
 
 
 PROGMEM const char * const loop_texts[] =
 {
 #if defined(LOOP_TEXT)
+  loop_text_PRE_NAME,
   loop_text_NAME,
   loop_text_MOTIV8,
   loop_text_BPM,
   loop_text_STRIDES,
+  loop_text_SPEED,
   loop_text_DONE,
   loop_text_LEFT,
   //Only in LOOP_TEXT mode
@@ -348,14 +353,15 @@ PROGMEM const char * const loop_texts[] =
   loop_text_00,
   loop_text_00a,
   loop_text_01,
-  loop_text_04,
+  loop_text_PRE_NAME,
   loop_text_NAME,
   loop_text_MOTIV8,
-  loop_text_07,
+  loop_text_PRE_NAME,
   loop_text_NAME,
   loop_text_MOTIV8,
-  loop_text_BPM,
+//  loop_text_BPM, //No HRM currently
   loop_text_STRIDES,
+  loop_text_SPEED,
   loop_text_DONE,
   loop_text_LEFT,
 #endif //!defined(LOOP_TEXT)
@@ -392,6 +398,25 @@ PROGMEM const char * const names_texts[] =
 
 // ****************************************************************************
 
+const char pre_names_text_00[] PROGMEM = "Do It ";
+const char pre_names_text_01[] PROGMEM = "Run  ";
+const char pre_names_text_02[] PROGMEM = "Push it ";
+const char pre_names_text_03[] PROGMEM = "Go   ";
+const char pre_names_text_04[] PROGMEM = "Harder ";
+
+
+PROGMEM const char * const pre_names_texts[] =
+{
+  pre_names_text_00,
+  pre_names_text_01,
+  pre_names_text_02,
+  pre_names_text_03,
+  pre_names_text_04,
+};
+#define PRE_NAMES_TEXTS_COUNT ( sizeof(pre_names_texts)/sizeof(pre_names_texts[0]) )
+
+// ****************************************************************************
+
 //                                       "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
 //                                       "0         1         2          3         4         5         6        7         8         9        10        11        12"
 const char motivates_text_00[] PROGMEM = "Channel your Inner Kenyan";
@@ -407,19 +432,19 @@ const char motivates_text_09[] PROGMEM = "AlMost there!";
 const char motivates_text_10[] PROGMEM = "Keep - Earning - Ice CreaM";
 const char motivates_text_11[] PROGMEM = "Long - hard -- fast?";
 const char motivates_text_12[] PROGMEM = "AlMost Beer tiMe";
-const char motivates_text_13[] PROGMEM = "You have staMina!   Call Me";
+const char motivates_text_13[] PROGMEM = "You have staMina!  Call Me";
 //const char motivates_text_14[] PROGMEM = "I just Met you; this is Crazy -- Here's My bib nuMber...";
 const char motivates_text_15[] PROGMEM = "Stop reading - keep running";
 const char motivates_text_16[] PROGMEM = "Toenails are Overrated";
-const char motivates_text_17[] PROGMEM = "Lookout - Behind you. RUN - RUN - RUN";
+const char motivates_text_17[] PROGMEM = "Lookout! Behind you. RUN - RUN - RUN!";
 const char motivates_text_18[] PROGMEM = "Having fun yet?";
 const char motivates_text_19[] PROGMEM = "You thought they said ruM too?";
 const char motivates_text_20[] PROGMEM = "Your pace or Mine?";
 const char motivates_text_21[] PROGMEM = "Relentless ForWard Motion";
 //const char motivates_text_22[] PROGMEM = "Do not fear Moving sloWly forWard...  Fear standing still!";
-const char motivates_text_23[] PROGMEM = "If found on ground -- please drag to finish line";
-const char motivates_text_24[] PROGMEM = "I found My happy pace";
-const char motivates_text_25[] PROGMEM = "I Wonder hoW this thing Works?";
+const char motivates_text_23[] PROGMEM = "If found On ground -- please drag to finish Line";
+const char motivates_text_24[] PROGMEM = "I found My Happy pace";
+const char motivates_text_25[] PROGMEM = "I Wonder HoW this thing Works?";
 const char motivates_text_26[] PROGMEM = "Pain noW... beer Later";
 //const char motivates_text_27[] PROGMEM = "Do my eMitted photons push her faster?";
 //const char motivates_text_28[] PROGMEM = "These Messages Not brought to you by the letter 'kay'";
@@ -570,11 +595,12 @@ unsigned long my_millis_function()
 //Function allowing the LED library to do a callback to our delay functions
 void my_delay_function(unsigned long duration_ms)
 {
-  //SERIAL_DEBUG_PRINT( (serial_print_int_padded_dec(my_millis_function(), 8)) );
+#if 0
   SERIAL_DEBUG_PRINT( my_millis_function() );
   SERIAL_DEBUG_PRINT_F( " @ delay " );
   SERIAL_DEBUG_PRINT( duration_ms );
   SERIAL_DEBUG_PRINTLN_F( " ms" );
+#endif
 #if 0
   if(duration_ms >= DELAY_BETWEEN_DISPLAYS_MS)
   {
@@ -633,6 +659,26 @@ void get_text_from_pm_char_ptr_array(char dst_text[], int dst_text_size, /*PROGM
 // **********************************  Display  *****************************************************
 // **************************************************************************************************
 
+//"42.001"
+void put_km_distance_in_string(unsigned long distance, char * const replace_text)
+{
+  //add kilometer part
+  itoa(distance / 1000, replace_text, 10);
+  //decimal
+  strcat (replace_text,".");
+  //Any "leading zeros" in places after the decimal
+  if((distance % 1000) <= 99)
+  {
+    strcat (replace_text,"0");
+  }
+  if((distance % 1000) <= 9)
+  {
+    strcat (replace_text,"0");
+  }
+  //Rest of metre figure
+  itoa(distance % 1000, replace_text + strlen(replace_text), 10);
+}
+
 //Will either return the incoming text if no replacement happens
 //Or do the replacement and return the changed text in replace_text
 //TODO: Add some string safety ( replace_text_size is 56 though -- so pretty safe... )
@@ -643,9 +689,7 @@ const char * replace_special_strings(const char * const text, char * const repla
   {
     if(metres_left > 0)
     {
-      itoa(metres_left / 1000, replace_text, 10);
-      strcat (replace_text,".");
-      itoa(metres_left % 1000, replace_text + strlen(replace_text), 10);
+      put_km_distance_in_string(metres_left, replace_text);
       strcat (replace_text," to go");
     }
     else
@@ -658,9 +702,7 @@ const char * replace_special_strings(const char * const text, char * const repla
   if(!strcmp(text, DISTANCE_DONE_REPLACE))  
   {
     unsigned long distance_done_display = min(cumulative_distance,metres_today);
-    itoa(distance_done_display / 1000, replace_text, 10);
-    strcat (replace_text,".");
-    itoa(distance_done_display % 1000, replace_text + strlen(replace_text), 10);
+    put_km_distance_in_string(distance_done_display, replace_text);
     strcat (replace_text," done");
     ret_text = replace_text;
   }
@@ -672,15 +714,46 @@ const char * replace_special_strings(const char * const text, char * const repla
     ret_text = replace_text;
   }
   else
+  if(!strcmp(text, SPEED_REPLACE))  
+  {
+    strcat (replace_text,"Speed = ");
+    if(last_inst_speed_int_mps != -1)
+    {
+      itoa(last_inst_speed_int_mps, replace_text + strlen(replace_text), 10);
+      strcat (replace_text,".");
+      //Any "leading zeros" in places after the decimal
+      if((last_inst_speed_frac_mps_d256*100)/256 <= 9)
+      {
+        strcat (replace_text,"0");
+      }
+      itoa( (last_inst_speed_frac_mps_d256*100)/256 , replace_text + strlen(replace_text), 10);
+      strcat (replace_text," MPS");
+    }
+    else
+    {
+      strcat (replace_text,"Fast?");
+    }
+    ret_text = replace_text;
+  }
+  else
   if(!strcmp(text, DISTANCE_TODAY_REPLACE))  
   {
-    itoa(metres_today / 1000, replace_text, 10);
-    strcat (replace_text,".");
-    itoa(metres_today % 1000, replace_text + strlen(replace_text), 10);
+    put_km_distance_in_string(metres_today, replace_text);
     strcat (replace_text," today");
     ret_text = replace_text;
   }
   else  
+  if(!strcmp(text, PRE_NAME_REPLACE))  
+  {
+    static int loop_pre_names = 0;
+#if !defined(LOOP_TEXT)
+    loop_pre_names = random(PRE_NAMES_TEXTS_COUNT);
+#endif //!defined(LOOP_TEXT)
+    get_text_from_pm_char_ptr_array(replace_text, MAX_CHARS_TO_DISPLAY_STR,
+                                    pre_names_texts, PRE_NAMES_TEXTS_COUNT, loop_pre_names++);
+    ret_text = replace_text;
+  }
+  else
   if(!strcmp(text, NAME_REPLACE))  
   {
     static int loop_names = 0;
@@ -734,10 +807,19 @@ const char * replace_special_strings(const char * const text, char * const repla
   else
   if(!strcmp(text, DEBUG_RXDP_REPLACE))  
   {
-    strcat (replace_text,"HRM=");
-    itoa(rx_HRM_data, replace_text + strlen(replace_text), 10);
-    strcat (replace_text," - SDM=");
-    itoa(rx_SDM_data, replace_text + strlen(replace_text), 10);
+    
+    
+    for(int i=0; i < ANT_DEVICE_NUMBER_CHANNELS; i++)
+    {
+      if(channels_to_setup[i])
+      {
+        strcat (replace_text,"Chan Rx(");
+        itoa(channels_to_setup[i]->channel_number, replace_text + strlen(replace_text), 10);
+        strcat (replace_text,")");
+        itoa(channels_to_setup[i]->data_rx, replace_text + strlen(replace_text), 10);
+        strcat (replace_text,"!");
+      }
+    }
     ret_text = replace_text;
   }
 
@@ -792,18 +874,29 @@ void print_and_delay(const char * text)
 //Distance, time and stride count
 int update_sdm_rollover( int MessageValue, unsigned long int * Cumulative, int * PreviousMessageValue )
 {
+  //Initialize CumulativeDistance to 0
+  //Above is external to this function
+  //PreviousMessageDistance is set to -1 to indicate no previous message -- external to this function
+  //initialize PreviousMessageDistance to the distance in the first SDM data message.
   if((*PreviousMessageValue) == -1)
   {
     (*PreviousMessageValue) = MessageValue;
+    //This assumes that the first measurement we get from device is at 'point 0' -- any first measurement is therefore ignored in the cumulative
   }
-  (*Cumulative) += (MessageValue - (*PreviousMessageValue));
-
-  if ((*PreviousMessageValue) > MessageValue)
+  else
   {
-    (*Cumulative) += 256; //All fields rollover on this amount
-  }
-  (*PreviousMessageValue) = MessageValue;
+    //For each subsequent SDM sensor Data message
+    //a. CumulativeDistance += MessageDistance – PreviousMessageDistance
+    (*Cumulative) += (MessageValue - (*PreviousMessageValue));
   
+    //b. If PreviousMessageDistance > MessageDistance, CumulativeDistance += 256m
+    if ((*PreviousMessageValue) > MessageValue)
+    {
+      (*Cumulative) += 256; //All fields rollover on this amount
+    }
+    //c. PreviousMessageDistance = MessageDistance
+    (*PreviousMessageValue) = MessageValue;
+  }
   return (*Cumulative);
 }
 
@@ -826,67 +919,127 @@ void process_packet( ANT_Packet * packet )
       SERIAL_DEBUG_PRINT_F( " " );
       const ANT_DataPage * dp = (const ANT_DataPage *) broadcast->data;
       
-      //To determine the device type -- and the data pages -- check channel setups
-      if(channel_device[broadcast->channel_number] == DEVCE_TYPE_HRM)
+      //Update received data
+      if( channels_to_setup[broadcast->channel_number] )
       {
-          switch(dp->data_page_number)
-          {
-            case DATA_PAGE_HEART_RATE_0:
-            case DATA_PAGE_HEART_RATE_0ALT:
-            case DATA_PAGE_HEART_RATE_1:
-            case DATA_PAGE_HEART_RATE_1ALT:
-            case DATA_PAGE_HEART_RATE_2:
-            case DATA_PAGE_HEART_RATE_2ALT:
-            case DATA_PAGE_HEART_RATE_3:
-            case DATA_PAGE_HEART_RATE_3ALT:
-            case DATA_PAGE_HEART_RATE_4:
-            case DATA_PAGE_HEART_RATE_4ALT:
-            {
-              const ANT_HRMDataPage * hrm_dp = (const ANT_HRMDataPage *) dp;
-              rx_HRM_data = true;
-              SERIAL_INFO_PRINT_F( "HR (BPM) = ");
-              SERIAL_INFO_PRINTLN( hrm_dp->computed_heart_rate );
-              last_computed_heart_rate = hrm_dp->computed_heart_rate;
-            }
-            break;
-
-            default:
-              //SERIAL_DEBUG_PRINTLN_F( "....");
-              break;
-          }
-      }
-      else
-      if(channel_device[broadcast->channel_number] == DEVCE_TYPE_SDM)
-      {
+        channels_to_setup[broadcast->channel_number]->data_rx = true;
+        
+        
+        //To determine the device type -- and the data pages -- check channel setups
+        if(channels_to_setup[broadcast->channel_number]->device_type == DEVCE_TYPE_HRM)
+        {
             switch(dp->data_page_number)
             {
-              case DATA_PAGE_SPEED_DISTANCE_1:
+              case DATA_PAGE_HEART_RATE_0:
+              case DATA_PAGE_HEART_RATE_0ALT:
+              case DATA_PAGE_HEART_RATE_1:
+              case DATA_PAGE_HEART_RATE_1ALT:
+              case DATA_PAGE_HEART_RATE_2:
+              case DATA_PAGE_HEART_RATE_2ALT:
+              case DATA_PAGE_HEART_RATE_3:
+              case DATA_PAGE_HEART_RATE_3ALT:
+              case DATA_PAGE_HEART_RATE_4:
+              case DATA_PAGE_HEART_RATE_4ALT:
               {
-                const ANT_SDMDataPage1 * sdm_dp = (const ANT_SDMDataPage1 *) dp;
-                rx_SDM_data = true;
-                //SERIAL_DEBUG_PRINT_F( "SDM Stride count..... = ");
-                //SERIAL_DEBUG_PRINTLN( sdm_dp->stride_count );
-                //SERIAL_DEBUG_PRINT_F( "SDM distance..... = ");
-                //SERIAL_DEBUG_PRINTLN( sdm_dp->distance_int );
-                SERIAL_INFO_PRINT_F( "Strides = ");
-                update_sdm_rollover( sdm_dp->stride_count, &cumulative_stride_count, &prev_msg_stride_count );
-                SERIAL_INFO_PRINTLN( cumulative_stride_count );
-                SERIAL_INFO_PRINT_F( "Distance = ");
-                update_sdm_rollover( sdm_dp->distance_int, &cumulative_distance, &prev_msg_distance );
-                SERIAL_INFO_PRINTLN( cumulative_distance );
+                //As we only care about the computed heart rate
+                // we use a same struct for all HRM pages
+                const ANT_HRMDataPage * hrm_dp = (const ANT_HRMDataPage *) dp;
+                SERIAL_INFO_PRINT_F( "HR[X] : BPM = ");
+                SERIAL_INFO_PRINTLN( hrm_dp->computed_heart_rate );
+                last_computed_heart_rate = hrm_dp->computed_heart_rate;
               }
               break;
   
               default:
-                //TODO: Other pages....
-                //SERIAL_DEBUG_PRINTLN_F("....");
+                  //TODO: Other pages....
+                  SERIAL_DEBUG_PRINT_F(" HRM DP# ");
+                  SERIAL_DEBUG_PRINTLN( dp->data_page_number );
                 break;
             }
+        }
+        else
+        if(channels_to_setup[broadcast->channel_number]->device_type == DEVCE_TYPE_SDM)
+        {
+              switch(dp->data_page_number)
+              {
+                case DATA_PAGE_SPEED_DISTANCE_1:
+                {
+                  const ANT_SDMDataPage1 * sdm_dp = (const ANT_SDMDataPage1 *) dp;
+                  SERIAL_DEBUG_PRINT_F( "SD[1] : ");
+                  //Time
+  //                SERIAL_DEBUG_PRINT_F( "Distance = ");
+  //                SERIAL_DEBUG_PRINT( sdm_dp->distance_int );
+  //                SERIAL_INFO_PRINT_F( ":");
+  //                SERIAL_DEBUG_PRINT( sdm_dp->distance_frac );
+                  //As for DP2
+  //                SERIAL_INFO_PRINT_F( " | Inst Speed = ");
+  //                SERIAL_INFO_PRINT( sdm_dp->inst_speed_int );
+  //                SERIAL_INFO_PRINT_F( ":");
+  //                SERIAL_INFO_PRINT( sdm_dp->inst_speed_frac );
+                  //last_inst_speed_mps = ((float)sdm_dp->inst_speed_int) + (sdm_dp->inst_speed_frac/256.0);
+                  last_inst_speed_int_mps       = sdm_dp->inst_speed_int;
+                  last_inst_speed_frac_mps_d256 = sdm_dp->inst_speed_frac;
+                  /////
+  //                SERIAL_DEBUG_PRINT_F( " | Stride count = ");
+  //                SERIAL_DEBUG_PRINT( sdm_dp->stride_count );
+                  //Latency
+                  
+                  //Processed
+                  //SERIAL_INFO_PRINT_F( " | ");
+                  SERIAL_INFO_PRINT_F( "CumStrides = ");
+                  update_sdm_rollover( sdm_dp->stride_count, &cumulative_stride_count, &prev_msg_stride_count );
+                  SERIAL_INFO_PRINT( cumulative_stride_count );
+                  SERIAL_INFO_PRINT_F( " | CumDistance = ");
+                  update_sdm_rollover( sdm_dp->distance_int, &cumulative_distance, &prev_msg_distance );
+                  SERIAL_INFO_PRINT( cumulative_distance );
+  //                SERIAL_INFO_PRINT_F( " | ");
+  //                SERIAL_INFO_PRINT_F( "Speed = ");
+  //                SERIAL_INFO_PRINT( last_inst_speed_mps );
+                  SERIAL_INFO_PRINTLN( );
+                }
+                break;
+                case DATA_PAGE_SPEED_DISTANCE_2:
+                {
+                  const ANT_SDMDataPage2 * sdm_dp = (const ANT_SDMDataPage2 *) dp;
+                  SERIAL_DEBUG_PRINT_F( "SD[2] : ");
+                  //Reserved1
+                  //Reserved2
+                  SERIAL_INFO_PRINT_F( "Cadence = ");
+                  SERIAL_INFO_PRINT( sdm_dp->cadence_int );
+                  SERIAL_INFO_PRINT_F( ":");
+                  SERIAL_INFO_PRINT( sdm_dp->cadence_frac );
+                  //As for DP1
+  //                SERIAL_INFO_PRINT_F( " | Inst Speed = ");
+  //                SERIAL_INFO_PRINT( sdm_dp->inst_speed_int );
+  //                SERIAL_INFO_PRINT_F( ":");
+  //                SERIAL_INFO_PRINT( sdm_dp->inst_speed_frac );
+                  //last_inst_speed_mps = ((float)sdm_dp->inst_speed_int) + (sdm_dp->inst_speed_frac/256.0);
+                  last_inst_speed_int_mps       = sdm_dp->inst_speed_int;
+                  last_inst_speed_frac_mps_d256 = sdm_dp->inst_speed_frac;
+                  ////
+                  //Reserved6
+                  //Status
+                  //Processed
+                  //SERIAL_INFO_PRINT_F( " | ");
+                  //SERIAL_INFO_PRINT_F( "Speed = ");
+                  //SERIAL_INFO_PRINT( last_inst_speed_mps );
+                  SERIAL_INFO_PRINTLN( );
+                }
+                break;
+    
+                default:
+                  //TODO: Other pages....
+                  SERIAL_DEBUG_PRINT_F(" SDM DP# ");
+                  SERIAL_DEBUG_PRINTLN( dp->data_page_number );
+                  break;
+              }
+          }  
         }
     }
     break;
     
     default:
+      //Non-broadcast data
       //SERIAL_DEBUG_PRINTLN_F("...");
       break;
   }
@@ -926,6 +1079,7 @@ void loop_display()
     metres_left = 0;
   }
 
+#if 0
   //HACK: Remove after sorted out SDM
   if(!rx_SDM_data)
   {
@@ -940,6 +1094,7 @@ void loop_display()
         cumulative_stride_count  += 1157/2;
       }
   }
+#endif
 }
 
 // ******************************************************************************************************
@@ -978,46 +1133,50 @@ void loop_antplus()
   #endif
       process_packet(packet);
     }
-  }
-
-  //Only one channel can progrss at a time though
-  //HRM channel first
-  if(ret_val_ce_hrm != ANT_CHANNEL_ESTABLISH_COMPLETE)
-  {
-    ret_val_ce_hrm = antplus.progress_setup_channel( &hrm_channel );
-    if(ret_val_ce_hrm == ANT_CHANNEL_ESTABLISH_COMPLETE)
-    {
-      SERIAL_INFO_PRINTLN_F( "HRM established." );
-    }
-    else
-    if(ret_val_ce_hrm == ANT_CHANNEL_ESTABLISH_PROGRESSING)
-    {
-      //SERIAL_DEBUG_PRINTLN_F( "HRM progressing." );
-    }
     else
     {
-      SERIAL_WARN_PRINTLN_F( "HRM ERROR!" );
-    }
-  }
-
-  if(ret_val_ce_hrm == ANT_CHANNEL_ESTABLISH_COMPLETE)
-  {
-    //If HRM is up, then we progress SDM
-    if(ret_val_ce_sdm != ANT_CHANNEL_ESTABLISH_COMPLETE)
-    {
-      ret_val_ce_sdm = antplus.progress_setup_channel( &sdm_channel );
-      if(ret_val_ce_sdm == ANT_CHANNEL_ESTABLISH_COMPLETE)
+      SERIAL_WARN_PRINT_F( "ReadPacket = " );
+      SERIAL_WARN_PRINTLN( ret_val );
+      if(ret_val == MESSAGE_READ_ERROR_MISSING_SYNC)
       {
-        SERIAL_INFO_PRINTLN_F( "SDM established." );
+        //Nothing -- allow a re-read to get back in sync
       }
       else
-      if(ret_val_ce_sdm == ANT_CHANNEL_ESTABLISH_PROGRESSING)
+      if(ret_val == MESSAGE_READ_ERROR_BAD_CHECKSUM)
       {
-        //SERIAL_DEBUG_PRINTLN_F( "SDM progressing." );
+        //Nothing -- fully formed package just bit errors
       }
       else
       {
-        SERIAL_WARN_PRINTLN_F( "SDM ERROR!" );
+        break;
+      }
+    }
+  }
+
+
+  for(int i=0; i < ANT_DEVICE_NUMBER_CHANNELS; i++)
+  {
+    if(channels_to_setup[i])
+    {
+      if(channels_to_setup[i]->channel_establish != ANT_CHANNEL_ESTABLISH_COMPLETE)
+      {
+        antplus.progress_setup_channel( channels_to_setup[i] );
+        if(channels_to_setup[i]->channel_establish == ANT_CHANNEL_ESTABLISH_COMPLETE)
+        {
+          SERIAL_INFO_PRINT( channels_to_setup[i]->channel_number );
+          SERIAL_INFO_PRINTLN_F( " - Established." );
+        }
+        else
+        if(channels_to_setup[i]->channel_establish == ANT_CHANNEL_ESTABLISH_PROGRESSING)
+        {
+          //SERIAL_DEBUG_PRINT( channels_to_setup[i]->channel_number );
+          //SERIAL_DEBUG_PRINTLN_F( " - Progressing." );
+        }
+        else
+        {
+          SERIAL_WARN_PRINT( channels_to_setup[i]->channel_number );
+          SERIAL_WARN_PRINTLN_F( " - ERROR!" );
+        }
       }
     }
   }
@@ -1081,6 +1240,17 @@ void setup()
   antplus.begin( ant_serial );
 #endif
 
+  for(int i=0; i < ANT_DEVICE_NUMBER_CHANNELS; i++)
+  {
+    if(channels_to_setup[i])
+    {
+      //For now we do a simple direct mapping
+      channels_to_setup[i]->channel_number = i;
+      SERIAL_DEBUG_PRINT_F("Configured to establish ANT channel #");
+      SERIAL_DEBUG_PRINTLN( channels_to_setup[i]->channel_number );
+    }
+  }
+
   SERIAL_DEBUG_PRINTLN_F("ANT+ Config Finished.");
   SERIAL_INFO_PRINTLN_F("Setup Finished.");
 }
@@ -1093,14 +1263,20 @@ void setup()
 void loop()
 {
   loop_antplus();
-  
-  
 
   //Get the ANT+ channels up quickly
   // then send some display messages
-  if((ret_val_ce_hrm == ANT_CHANNEL_ESTABLISH_COMPLETE)
-      &&
-     (ret_val_ce_sdm == ANT_CHANNEL_ESTABLISH_COMPLETE))
+  boolean channels_to_setup_established = true;
+  for(int i=0; i < ANT_DEVICE_NUMBER_CHANNELS; i++)
+  {
+    if(channels_to_setup[i])
+    {
+      channels_to_setup_established &= (channels_to_setup[i]->channel_establish == ANT_CHANNEL_ESTABLISH_COMPLETE);
+    }
+  }
+  
+  
+  if(channels_to_setup_established)
   {
     loop_display();
   }
